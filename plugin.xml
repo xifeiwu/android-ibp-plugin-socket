@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>  
+<plugin xmlns="http://apache.org/cordova/ns/plugins/1.0"  
+    id="ibp.plugin.socket"  
+    version="0.0.1">  
+    <name>Socket</name>  
+    <description>Socket Connection</description>  
+    <author>xifei</author>  
+    <license>Apache 2.0 License</license>  
+    <engines>  
+        <engine name="cordova" version=">=3.0.0" />  
+    </engines>  
+
+    <js-module src="www/socket.js" name="socket">
+        <clobbers target="Socket" />
+    </js-module>
+
+    <platform name="android">
+        <config-file target="config.xml" parent="/*">
+            <feature name="SocketPlugin">
+                <param name="android-package" value="ibp.plugin.socket.SocketPlugin"/>
+            </feature>
+        </config-file>
+        <source-file src="src/android/SocketPlugin.java" target-dir="src/ibp/plugin/socket" />
+        <source-file src="src/android/SocketConnection.java" target-dir="src/ibp/plugin/socket" />
+    </platform>
+  
+</plugin>  
