@@ -82,11 +82,16 @@ public class SocketConnection {
             logToMainFrame("LOG", "ServerSocket is Not Running.");
             result = new PluginResult(PluginResult.Status.ERROR, "stopServerSocket: ServerSocket is Not Running.");
         }
-        callbackContext.sendPluginResult(result);
+        if(null != callbackContext){
+            callbackContext.sendPluginResult(result);
+        }
     }
     private ServerSocket mServerSocket;
     private Socket remoteSocket;
     private boolean isServerStarted = false;
+    public boolean getServerSocketState(){
+        return isServerStarted;
+    }
 //    private Map<String, Socket> socketPool = new HashMap<String,Socket>();
     private Runnable ServerRunnable = new Runnable() {
         @Override
@@ -129,6 +134,9 @@ public class SocketConnection {
         try {
             input = getReader(socket);
             String message = input.readLine();
+            if(null == message){
+                return null;
+            }
             JSONObject msgObjFromRemote = new JSONObject(message);
             if(msgObjFromRemote.has("type") && (msgObjFromRemote.getString("type").equals("SentEnFirst"))){
                 mMsgObj.put("content", msgObjFromRemote.getString("content"));                
@@ -192,8 +200,11 @@ public class SocketConnection {
     }    
     public boolean sendMessage(String address, int port, JSONObject msgObj) throws JSONException {
         boolean isOK = false;
-        msgObj.put("from", this.mAddress);
+        if(!msgObj.has("from")){
+            msgObj.put("from", this.mAddress);
+        }
         msgObj.put("uuid", this.mAddress);
+        msgObj.put("time", System.currentTimeMillis());
         JSONObject objToSend = new JSONObject();
         objToSend.put("type", "SentEnFirst");
         objToSend.put("content", msgObj.toString());

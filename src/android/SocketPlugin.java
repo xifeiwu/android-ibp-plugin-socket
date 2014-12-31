@@ -16,8 +16,6 @@
 
 package ibp.plugin.socket;
 
-import ibp.plugin.nsd.NSDHelper;
-
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.PluginResult;
@@ -26,18 +24,14 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import android.annotation.SuppressLint;
-import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
-import android.util.Log;
 
 @SuppressLint({ "HandlerLeak", "SimpleDateFormat" })
 public class SocketPlugin extends CordovaPlugin {
-//
-//    public static final String TAG = "NsdChat";
-//    private String serverName;
-//    private int serverPort;
     private SocketConnection socketConn;
+    private String mName;
+    private int mPort = 0;
     public SocketPlugin(){
         socketConn = new SocketConnection(this);
     }
@@ -46,7 +40,9 @@ public class SocketPlugin extends CordovaPlugin {
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
         switch (action) {
         case "startServerSocket":
-            this.startServerSocket(callbackContext);
+            mName = args.getString(0);
+            mPort = args.getInt(1);
+            this.startServerSocket(callbackContext, mPort);
             break;
         case "stopServerSocket":
             this.stopServerSocket(callbackContext);
@@ -55,17 +51,58 @@ public class SocketPlugin extends CordovaPlugin {
             this.initHandler(callbackContext);
             break;
         case "sendMessage":
-            this.sendMessage(callbackContext);
+            this.sendMessage(callbackContext, args);
             break;
         }
         return true;
     }
-    private void sendMessage(CallbackContext callbackContext){
-        
+
+    public void onPause(boolean multitasking) {
+        if ((socketConn.getServerSocketState()) && (null != mHandler)) {
+            new Thread(new Runnable(){
+                @Override
+                public void run() {
+                    // TODO Auto-generated method stub
+                    socketConn.stopServerSocket(null);
+                    closeHandler();                    
+                }                
+            }).start();
+        }
     }
-    private void startServerSocket(CallbackContext callbackContext){
+
+    public void onResume(boolean multitasking) {
+    }
+    /**
+     * origMsg: [name, address, port, message]
+     * @param callbackContext
+     * @param origMsg
+     */
+    private void sendMessage(CallbackContext callbackContext, JSONArray origMsg){
+        try {
+            JSONObject msgObj = new JSONObject();
+            String dstName = origMsg.getString(0);
+            String address = origMsg.getString(1);
+            int port = origMsg.getInt(2);
+            String message = origMsg.getString(3);
+            if(null != mName){
+                msgObj.put("from", mName);
+            }
+            msgObj.put("to", dstName);
+            msgObj.put("message", message);
+            msgObj.put("type", "app1");
+            if(socketConn.sendMessage(address, port, msgObj)){
+                callbackContext.success("Plugin.sendMessage success");
+            }else{
+                callbackContext.error("Plugin.sendMessage error");
+            }
+        } catch (JSONException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+    }
+    private void startServerSocket(CallbackContext callbackContext, int port){
 //        initHandler(callbackContext);
-        socketConn.startServerSocket(callbackContext, 7777);
+        socketConn.startServerSocket(callbackContext, port);
     }
     private void stopServerSocket(CallbackContext callbackContext){
         socketConn.stopServerSocket(callbackContext);
@@ -78,20 +115,24 @@ public class SocketPlugin extends CordovaPlugin {
                 mHandler = new Handler() {
                     @Override
                     public void handleMessage(Message msg) {
-//                        String type = msg.getData().getString("type");
-//                        String content  = msg.getData().getString("content");
-//                        JSONObject data = new JSONObject();
-//                        try {
-//                            data.put("type", new String(type));
-//                            data.put("content", new String(content));
-//                        } catch (JSONException e) {
-//                        }
-                        PluginResult result = new PluginResult(PluginResult.Status.OK, (JSONObject)msg.obj);
-                        result.setKeepCallback(true);
+                        PluginResult result = null;
+                        switch(msg.what){
+                        case 0:
+                            result = new PluginResult(PluginResult.Status.OK, (JSONObject)msg.obj);
+                            result.setKeepCallback(true);
+                            break;
+                        case -1:
+                            result = new PluginResult(PluginResult.Status.NO_RESULT);
+                            mHandler = null;
+                            break;
+                        }
                         cbc.sendPluginResult(result);
                     }
                 };
-            } 
+            }
+            PluginResult result = new PluginResult(PluginResult.Status.OK, "initHandler: success.");
+            result.setKeepCallback(true);
+            callbackContext.sendPluginResult(result);
         } catch (Exception e) {
             PluginResult result = new PluginResult(PluginResult.Status.ERROR, "initHandler Exception: " + e);
             callbackContext.sendPluginResult(result);
@@ -103,11 +144,21 @@ public class SocketPlugin extends CordovaPlugin {
             message.obj = contentObj;
             mHandler.sendMessage(message);
         }
+    }    
+    public void closeHandler() {
+        if(null != mHandler){
+            Message message = new Message();
+            message.what = -1;
+            mHandler.sendMessage(message);
+        }
     }
     public void processMsgObj(JSONObject mMsgObj){
         try {
             if(mMsgObj.has("content")){
-                sendByHandler(new JSONObject(mMsgObj.getString("content")));
+                JSONObject objToJS = new JSONObject(mMsgObj.getString("content"));
+                objToJS.put("address", mMsgObj.getString("address"));
+                objToJS.put("port", mPort);
+                sendByHandler(objToJS);
             }      
         } catch (JSONException e) {
             // TODO Auto-generated catch block
